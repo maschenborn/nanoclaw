@@ -14,7 +14,15 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Resolve which remote carries the `channels` branch. In this fork
+# `origin` points at maschenborn/nanoclaw and `upstream` at qwibitai/nanoclaw,
+# so the upstream-default `origin/channels` would fail.
+# shellcheck source=lib/channels-remote.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/channels-remote.sh"
+CHANNELS_REMOTE="$(resolve_channels_remote)"
+
 echo "=== NANOCLAW SETUP: INSTALL_WHATSAPP ==="
+echo "CHANNELS_REMOTE: $CHANNELS_REMOTE"
 
 CHANNEL_FILES=(
   src/channels/whatsapp.ts
@@ -41,11 +49,11 @@ if ! $needs_install; then
 fi
 
 echo "STEP: fetch-channels-branch"
-git fetch origin channels
+git fetch "$CHANNELS_REMOTE" channels
 
 echo "STEP: copy-files"
 for f in "${CHANNEL_FILES[@]}"; do
-  git show "origin/channels:$f" > "$f"
+  git show "$CHANNELS_REMOTE/channels:$f" > "$f"
 done
 
 echo "STEP: register-import"
@@ -66,7 +74,16 @@ if ! grep -q "'whatsapp-auth':" setup/index.ts; then
 fi
 
 echo "STEP: pnpm-install"
-pnpm install @whiskeysockets/baileys@6.17.16 qrcode@1.5.4 @types/qrcode@1.5.6 pino@9.6.0
+# Baileys version must match upstream/channels' package.json — a downgrade
+# breaks the build because the channels-branch whatsapp.ts uses 7.x APIs
+# (notably the LID-mapping signal repository). Read the pin out of the
+# branch we just copied from so we never drift.
+BAILEYS_PIN="$(git show "$CHANNELS_REMOTE/channels:package.json" \
+  | sed -n 's/.*"@whiskeysockets\/baileys"[[:space:]]*:[[:space:]]*"\^\?\([^"]*\)".*/\1/p' \
+  | head -n1)"
+: "${BAILEYS_PIN:=7.0.0-rc.9}"
+echo "BAILEYS_PIN: $BAILEYS_PIN"
+pnpm install "@whiskeysockets/baileys@$BAILEYS_PIN" qrcode@1.5.4 @types/qrcode@1.5.6 pino@9.6.0
 
 echo "STEP: pnpm-build"
 pnpm run build

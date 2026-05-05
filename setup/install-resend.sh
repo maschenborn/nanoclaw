@@ -11,7 +11,12 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# shellcheck source=lib/channels-remote.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/channels-remote.sh"
+CHANNELS_REMOTE="$(resolve_channels_remote)"
+
 echo "=== NANOCLAW SETUP: INSTALL_RESEND ==="
+echo "CHANNELS_REMOTE: $CHANNELS_REMOTE"
 
 needs_install=false
 [[ -f src/channels/resend.ts ]] || needs_install=true
@@ -26,10 +31,10 @@ if ! $needs_install; then
 fi
 
 echo "STEP: fetch-channels-branch"
-git fetch origin channels
+git fetch "$CHANNELS_REMOTE" channels
 
 echo "STEP: copy-files"
-git show origin/channels:src/channels/resend.ts > src/channels/resend.ts
+git show "$CHANNELS_REMOTE/channels:src/channels/resend.ts" > src/channels/resend.ts
 
 echo "STEP: register-import"
 if ! grep -q "import './resend.js';" src/channels/index.ts; then
@@ -37,7 +42,12 @@ if ! grep -q "import './resend.js';" src/channels/index.ts; then
 fi
 
 echo "STEP: pnpm-install"
-pnpm install @resend/chat-sdk-adapter@0.1.1
+RESEND_PIN="$(git show "$CHANNELS_REMOTE/channels:package.json" \
+  | sed -n 's/.*"@resend\/chat-sdk-adapter"[[:space:]]*:[[:space:]]*"\^\?\([^"]*\)".*/\1/p' \
+  | head -n1)"
+: "${RESEND_PIN:=0.1.1}"
+echo "RESEND_PIN: $RESEND_PIN"
+pnpm install "@resend/chat-sdk-adapter@$RESEND_PIN"
 
 echo "STEP: pnpm-build"
 pnpm run build
