@@ -39,3 +39,10 @@ groups/*
 .nanoclaw/
 
 agents-sdk-docs
+
+# OpenClaw runtime state (contains paperclip API token)
+.openclaw/
+
+# Python bytecode caches
+__pycache__/
+*.pyc

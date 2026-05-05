@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenClaw Gateway for NanoClaw/Alfred (Paperclip integration)
+After=network.target nanoclaw.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/orchester/alfred
+ExecStart=/usr/local/bin/node %h/orchester/alfred/scripts/openclaw-gateway.cjs
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/orchester/alfred/logs/openclaw-gateway.log
+StandardError=append:%h/orchester/alfred/logs/openclaw-gateway.log
+Environment=OPENCLAW_GATEWAY_PORT=18789
+
+[Install]
+WantedBy=default.target
