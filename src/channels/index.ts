@@ -9,3 +9,4 @@
 import './cli.js';
 import './whatsapp.js';
 import './resend.js';
+import './gchat.js';
