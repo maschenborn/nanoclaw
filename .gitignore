@@ -46,3 +46,7 @@ agents-sdk-docs
 # Python bytecode caches
 __pycache__/
 *.pyc
+
+# Briefing files with cleartext credentials — never commit
+elfi.md
+*.briefing.md
