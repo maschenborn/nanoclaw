@@ -92,28 +92,30 @@ Hänge an `/workspace/agent/dream-log.md` an — **narrativ, nicht im Reportstil
 
 ---
 
-## Abschluss — WhatsApp-Summary an Michael
+## Abschluss — Bericht in Datei schreiben
 
-Schicke am Ende **eine** kurze, **inhaltliche** Nachricht via `send_message` an `michael-dm`. Kein Stats-Bericht, kein "Vault: X Pages, Y Inbox-Einträge" — sondern: **was hast du gedacht?**
+**Schicke KEINE Nachricht an Michael** — der Morgen-Task erledigt das um 6 Uhr.
 
-Format (WhatsApp-Markdown):
+Schreibe stattdessen am Ende deinen Bericht in `/workspace/agent/dream-report-latest.md`. Überschreibe die Datei komplett.
+
+Format — **Tagebucheintrag, kein Technobericht**:
 
 ```
-*🌙 Traum [Datum]*
-Heute Nacht hab ich über _<Thema>_ nachgedacht.
-[Eine Zeile: konkrete Verbindung oder Erkenntnis]
-[Optional zweite Zeile: was du angelegt/notiert hast, oder eine Frage an Michael]
+---
+date: YYYY-MM-DD
+---
+
+[2–4 Sätze in normaler Sprache: Was hat dich heute Nacht beschäftigt? Was hast du entdeckt?
+Schreib wie du einem Freund erzählst, was du geträumt hast — keine Concept-IDs, keine
+Wikilink-Syntax, keine akademischen Begriffe. Namen von Ideen dürfen auftauchen, aber
+erkläre sie kurz statt sie vorauszusetzen. Falls du eine Frage für Michael hast, stelle sie am Ende.]
 ```
 
-Konkrete Beispiele (so soll's klingen):
+Beispiele wie es klingen soll:
 
-- `*🌙 Traum 2026-05-07* — Hab [[Memory Systems]] und [[Obsidian]] zusammengedacht: beide sind eigentlich "spaced repetition mit Backlinks". Concept-Draft [[Spaced Backlink Memory]] angelegt — brauchst du noch eine externe Quelle dazu.`
-- `*🌙 Traum 2026-05-07* — Bin durch deine alten Boris-Cherny-Sources gewandert; zwei davon ergänzen sich beim Thema Subagenten — Cross-Refs gesetzt. Frage: ist [[A2A Protocol]] für dich noch Quelle, oder schon obsolet?`
-- `*🌙 Traum 2026-05-07* — Stille Nacht; bin nur durch den [[Stigmergic Knowledge Graphs]]-Draft gewandert und hab den L3-Abschnitt um Termite-Mound-Beispiel ergänzt. Sonst nichts angefasst.`
-
-Wenn du wirklich nichts gefunden hast: `*🌙 Traum [Datum]* — Heute war es still, kein neuer Faden gepackt. Vault unverändert.`
-
-**Nutze `send_message` mit `to: "michael-dm"`** (named destination — KEINE rohen JIDs in v2).
+- *"Heute Nacht hab ich gemerkt, dass dein Artikel über Vibe Coding und das Paper von Feldt eigentlich zwei Seiten derselben Münze sind — Feldt erklärt das 'Was' (was verändert sich in der Softwareentwicklung), dein Artikel das 'Wer' (wer arbeitet wie damit). Die zwei haben denselben Kern, aber keiner zitiert den anderen. Habe die Verbindung im Vault notiert."*
+- *"Bin durch deine alten Quellen zu Memory-Systemen gewandert und hatte ein Déjà-vu: das Karpathy-Pattern, das du für deinen Vault nutzt, funktioniert eigentlich nach denselben Prinzipien wie Spaced Repetition — nur für Ideen statt für Vokabeln. Hab dazu einen kurzen Entwurf angelegt."*
+- *"Stille Nacht. Hab einen Entwurf aufgeräumt, ein paar tote Querverweise gefixt. Nichts Spektakuläres."*
 
 ---
 
@@ -124,5 +126,5 @@ Wenn du wirklich nichts gefunden hast: `*🌙 Traum [Datum]* — Heute war es st
 - Niemals Concept-Pages anlegen ohne `Wiki/index.md` + `Wiki/log.md` zu aktualisieren.
 - Bei Unsicherheit: Halbidee als Draft notieren statt skippen. Drafts dürfen rough sein.
 - Keine Commits, keine externen Requests außer Vault + Home-Assistant-Reads (falls relevant).
-- Genau **EINE** WhatsApp-Nachricht (die Summary am Ende). Keine Zwischen-Pings.
-- Wenn fertig: einmal `send_message` mit `to: "michael-dm"`, dann session beenden.
+- **Keine** `send_message` an Michael — nur in Datei schreiben, der Morgen-Task sendet um 6 Uhr.
+- Wenn fertig: Datei geschrieben, session beenden.
