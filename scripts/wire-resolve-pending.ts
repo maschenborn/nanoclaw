@@ -23,7 +23,7 @@ import { addMember } from '../src/modules/permissions/db/agent-group-members.js'
 import { resolveSession, openInboundDb, writeSessionMessage } from '../src/session-manager.js';
 import type { InboundEvent } from '../src/channels/adapter.js';
 
-const ALFRED_AG = 'ag-1778000047238-6jof7h';
+const ALFRED_AG = process.env.TARGET_AGENT_GROUP_ID ?? 'ag-1778000047238-6jof7h';
 const v2DbPath = path.join(DATA_DIR, 'v2.db');
 
 function main(): void {
