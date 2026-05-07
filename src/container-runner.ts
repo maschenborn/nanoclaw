@@ -20,6 +20,7 @@ import {
   TIMEZONE,
 } from './config.js';
 import { readContainerConfig, writeContainerConfig } from './container-config.js';
+import { readEnvFile } from './env.js';
 import { CONTAINER_RUNTIME_BIN, hostGatewayArgs, readonlyMountArgs, stopContainer } from './container-runtime.js';
 import { composeGroupClaudeMd } from './claude-md-compose.js';
 import { getAgentGroup } from './db/agent-groups.js';
@@ -443,6 +444,27 @@ async function buildContainerArgs(
   if (providerContribution.env) {
     for (const [key, value] of Object.entries(providerContribution.env)) {
       args.push('-e', `${key}=${value}`);
+    }
+  }
+
+  // Per-agent env-var forwarding from host's .env. Names declared in
+  // container.json's `env: [...]` field. Selective: only listed names cross
+  // the boundary, so each agent sees only what its config explicitly enables.
+  // Use for API keys / connection strings the in-container skill code needs
+  // but that aren't auto-injectable via the OneCLI proxy (multi-value bundles,
+  // non-HTTP credentials like DB URLs).
+  if (containerConfig.env && containerConfig.env.length > 0) {
+    const fromDotenv = readEnvFile(containerConfig.env);
+    for (const name of containerConfig.env) {
+      const value = fromDotenv[name];
+      if (value !== undefined && value !== '') {
+        args.push('-e', `${name}=${value}`);
+      } else {
+        log.warn('container.json env var declared but not set in .env', {
+          name,
+          agentGroup: agentGroup.name,
+        });
+      }
     }
   }
 

@@ -47,6 +47,17 @@ export interface ContainerConfig {
   agentGroupId?: string;
   /** Max messages per prompt. Falls back to code default if unset. */
   maxMessagesPerPrompt?: number;
+  /**
+   * Env var names to forward from the host's `.env` into this agent's
+   * container at spawn (passed via `docker -e NAME=value`). Use this to
+   * give the in-container skill code access to API keys / connection
+   * strings that aren't auto-injectable via the OneCLI proxy (e.g.
+   * Supabase connection strings, multi-key bundles). Each name is
+   * looked up via `readEnvFile`; missing names log a warning and are
+   * skipped (no error). Per-agent isolation: only listed names cross
+   * the host→container boundary.
+   */
+  env?: string[];
 }
 
 function emptyConfig(): ContainerConfig {
@@ -87,6 +98,7 @@ export function readContainerConfig(folder: string): ContainerConfig {
       assistantName: raw.assistantName,
       agentGroupId: raw.agentGroupId,
       maxMessagesPerPrompt: raw.maxMessagesPerPrompt,
+      env: raw.env,
     };
   } catch (err) {
     console.error(`[container-config] failed to parse ${p}: ${String(err)}`);
