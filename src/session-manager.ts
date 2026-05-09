@@ -123,6 +123,7 @@ export function resolveSession(
     container_status: 'stopped',
     last_active: null,
     created_at: new Date().toISOString(),
+    outbound_mode: 'channel',
   };
 
   createSession(session);

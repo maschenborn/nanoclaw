@@ -99,6 +99,8 @@ export interface MessagingGroupAgent {
   created_at: string;
 }
 
+export type OutboundMode = 'channel' | 'none';
+
 export interface Session {
   id: string;
   agent_group_id: string;
@@ -109,6 +111,7 @@ export interface Session {
   container_status: 'running' | 'idle' | 'stopped';
   last_active: string | null;
   created_at: string;
+  outbound_mode: OutboundMode;
 }
 
 // ── Session DB entities ──

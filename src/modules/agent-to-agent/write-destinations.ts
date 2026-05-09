@@ -12,6 +12,7 @@ import fs from 'fs';
 import { getAgentGroup } from '../../db/agent-groups.js';
 import { getMessagingGroup } from '../../db/messaging-groups.js';
 import { replaceDestinations, type DestinationRow } from '../../db/session-db.js';
+import { getSession } from '../../db/sessions.js';
 import { log } from '../../log.js';
 import { inboundDbPath, openInboundDb } from '../../session-manager.js';
 import { getDestinations } from './db/agent-destinations.js';
@@ -19,6 +20,22 @@ import { getDestinations } from './db/agent-destinations.js';
 export function writeDestinations(agentGroupId: string, sessionId: string): void {
   const dbPath = inboundDbPath(agentGroupId, sessionId);
   if (!fs.existsSync(dbPath)) return;
+
+  // Autonomous sessions (`outbound_mode='none'`) get an empty destination
+  // map — they exist only to run scheduled tasks and write to disk; any
+  // `send_message` should fail loudly rather than silently reach a channel
+  // the session has no business writing to.
+  const session = getSession(sessionId);
+  if (session?.outbound_mode === 'none') {
+    const db = openInboundDb(agentGroupId, sessionId);
+    try {
+      replaceDestinations(db, []);
+    } finally {
+      db.close();
+    }
+    log.debug('Destination map cleared (outbound_mode=none)', { sessionId });
+    return;
+  }
 
   const rows = getDestinations(agentGroupId);
   const resolved: DestinationRow[] = [];
