@@ -509,7 +509,23 @@ async function buildContainerArgs(
   const imageTag = containerConfig.imageTag || CONTAINER_IMAGE;
   args.push(imageTag);
 
-  args.push('-c', 'exec bun run /app/src/index.ts');
+  // Inline SSH wire-up (runs before bun starts). Idempotent and no-op if the
+  // agent doesn't have a Mittwald-SSH mount. Lives here rather than in
+  // entrypoint.sh because the spawn explicitly overrides --entrypoint to bash.
+  // Convention: any `*-mittwald-ssh/id_ed25519` under /workspace/extra/ gets
+  // copied to ~/.ssh/id_ed25519_mittwald and matched by a Host *.project.host
+  // block — so `mw container port-forward` can authenticate to Mittwald's SSH
+  // tunnel without Permission denied. Newlines (not `;`-joined) — bash's
+  // `if/then/fi` parsing breaks if `then` is followed by a `;` and nothing else.
+  const startupCmd = `KEYSRC=$(ls /workspace/extra/*-mittwald-ssh/id_ed25519 2>/dev/null | head -1)
+if [ -n "$KEYSRC" ]; then
+  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+  cp "$KEYSRC" "$HOME/.ssh/id_ed25519_mittwald" && chmod 600 "$HOME/.ssh/id_ed25519_mittwald"
+  printf 'Host *.project.host\\n    StrictHostKeyChecking accept-new\\n    UserKnownHostsFile ~/.ssh/known_hosts\\n    IdentityFile ~/.ssh/id_ed25519_mittwald\\n    IdentitiesOnly yes\\n' > "$HOME/.ssh/config"
+  chmod 600 "$HOME/.ssh/config"
+fi
+exec bun run /app/src/index.ts`;
+  args.push('-c', startupCmd);
 
   return args;
 }
