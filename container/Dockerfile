@@ -22,6 +22,7 @@ ARG INSTALL_CJK_FONTS=false
 ARG CLAUDE_CODE_VERSION=2.1.116
 ARG AGENT_BROWSER_VERSION=latest
 ARG VERCEL_VERSION=52.2.1
+ARG MITTWALD_CLI_VERSION=1.16.0
 ARG BUN_VERSION=1.3.12
 
 # ---- System dependencies -----------------------------------------------------
@@ -49,6 +50,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         ca-certificates \
         curl \
         git \
+        netcat-openbsd \
+        postgresql-client \
         tini \
         unzip \
     && if [ "$INSTALL_CJK_FONTS" = "true" ]; then \
@@ -80,29 +83,35 @@ COPY agent-runner/package.json agent-runner/bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
 
-# ---- pnpm + global Node CLIs -------------------------------------------------
-# Most stable first, most frequently bumped last. Bumping claude-code
-# (the most common change) only invalidates one layer.
-#
-# only-built-dependencies gates pnpm's supply-chain policy:
-#   - agent-browser has a postinstall build step.
-#   - @anthropic-ai/claude-code's postinstall downloads the native Claude
-#     binary (linux-arm64 variant on our image). Without the allowlist
-#     the SDK fails at spawn time with "native binary not found".
+# ---- pnpm (kept for self-mod npm-package installs into per-agent images) -----
+# Pinned via npm (not corepack — corepack stores its activation in the user's
+# cache, so when the Dockerfile switches USER root → node, corepack discards
+# the pinned version and re-downloads "latest" on first invocation).
 ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+ENV PATH="/usr/local/bin:$PNPM_HOME/bin:$PNPM_HOME:$PATH"
+ARG PNPM_VERSION=11.0.9
+RUN npm install -g pnpm@${PNPM_VERSION}
 
-RUN --mount=type=cache,target=/root/.cache/pnpm \
-    echo "only-built-dependencies[]=agent-browser" > /root/.npmrc && \
-    echo "only-built-dependencies[]=@anthropic-ai/claude-code" >> /root/.npmrc && \
-    pnpm install -g "vercel@${VERCEL_VERSION}"
-
-RUN --mount=type=cache,target=/root/.cache/pnpm \
-    pnpm install -g "agent-browser@${AGENT_BROWSER_VERSION}"
-
-RUN --mount=type=cache,target=/root/.cache/pnpm \
-    pnpm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+# ---- Build-time global Node CLIs (via npm, not pnpm) -------------------------
+# We use npm (not pnpm) for these CLIs because pnpm's strict node-modules
+# isolation hides transitive deps that the tools' runtime code expects at the
+# top level — @mittwald/cli can't resolve @mittwald/api-client-commons,
+# @anthropic-ai/claude-code skips its postinstall that fetches the native
+# platform binary, etc. npm's flat layout sidesteps both. Binaries land in
+# /usr/local/bin (first in PATH).
+#
+# vercel: Vercel CLI. Kept around so legacy agents that still expect it can
+# find it; new agents (Elfi as of 2026-05-13) don't use it.
+# agent-browser: headless Chromium MCP server.
+# @anthropic-ai/claude-code: Claude Agent SDK binary (loaded explicitly by the
+#   agent-runner via pathToClaudeCodeExecutable: /usr/local/bin/claude).
+# @mittwald/cli: `mw` — Mittwald Container Stack management (Elfi needs this
+#   for lazi.works DB access via `mw container port-forward`).
+RUN npm install -g \
+    "vercel@${VERCEL_VERSION}" \
+    "agent-browser@${AGENT_BROWSER_VERSION}" \
+    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    "@mittwald/cli@${MITTWALD_CLI_VERSION}"
 
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh
