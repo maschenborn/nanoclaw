@@ -19,7 +19,7 @@ ARG INSTALL_CJK_FONTS=false
 # Pin CLI versions for reproducibility. Bump deliberately — unpinned installs
 # mean every rebuild silently picks up the latest and can break in lockstep
 # across all users.
-ARG CLAUDE_CODE_VERSION=2.1.116
+ARG CLAUDE_CODE_VERSION=2.1.128
 ARG AGENT_BROWSER_VERSION=latest
 ARG VERCEL_VERSION=52.2.1
 ARG MITTWALD_CLI_VERSION=1.16.0
@@ -89,6 +89,14 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # the pinned version and re-downloads "latest" on first invocation).
 ENV PNPM_HOME="/pnpm"
 ENV PATH="/usr/local/bin:$PNPM_HOME/bin:$PNPM_HOME:$PATH"
+# Pinned via npm (not corepack — corepack stores its activation in the user's
+# cache, so when the Dockerfile switches USER root → node, corepack discards
+# the pinned version and re-downloads "latest" on first invocation).
+# Upstream pins pnpm@10.33.0 via corepack with `only-built-dependencies[]=`
+# in .npmrc; we switched to npm + pnpm@11.0.9 because that allowlist
+# stopped being honored in pnpm 11 globals (claude-code/agent-browser
+# postinstalls silently skipped). Build-time CLIs use npm directly below,
+# pnpm is only kept for self-mod npm-package installs into per-agent images.
 ARG PNPM_VERSION=11.0.9
 RUN npm install -g pnpm@${PNPM_VERSION}
 
@@ -112,6 +120,11 @@ RUN npm install -g \
     "agent-browser@${AGENT_BROWSER_VERSION}" \
     "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     "@mittwald/cli@${MITTWALD_CLI_VERSION}"
+
+# ---- ncl CLI wrapper ----------------------------------------------------------
+# Actual script lives in the mounted source at /app/src/cli/ncl.ts.
+RUN printf '#!/bin/sh\nexec bun /app/src/cli/ncl.ts "$@"\n' > /usr/local/bin/ncl && \
+    chmod +x /usr/local/bin/ncl
 
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh

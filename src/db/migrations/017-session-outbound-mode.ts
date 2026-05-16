@@ -22,8 +22,8 @@ import type Database from 'better-sqlite3';
 
 import type { Migration } from './index.js';
 
-export const migration014: Migration = {
-  version: 14,
+export const migration017: Migration = {
+  version: 17,
   name: 'session-outbound-mode',
   up(db: Database.Database) {
     db.exec(`ALTER TABLE sessions ADD COLUMN outbound_mode TEXT NOT NULL DEFAULT 'channel'`);
