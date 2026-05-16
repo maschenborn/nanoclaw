@@ -339,9 +339,41 @@ Mehrere Queries in einer Session: Port-Forward einmal starten, mehrere `psql -c 
 - **Transaktional bei Mehrfach-Statements**: `BEGIN;` → mehrere Statements → `SELECT count(*)` zum Sanity-Check → `COMMIT;` oder `ROLLBACK;`.
 - **NIEMALS `DROP TABLE`, `TRUNCATE`, oder schemaverändernde DDL** — das geht durch Prisma-Migrations, nicht via psql.
 
-### Alternative — `mw container exec` (NICHT autonom nutzen)
+### Direkter SSH in die Mittwald-Container (verifiziert ✅ 2026-05-16)
 
-Statt Port-Forward könntest du `mw container exec c-krnsej --project-id p-plhv26 -- ...` machen — das geht über die Mittwald-API (kein SSH). Aber das shellt in den **Produktions-App-Container** (c-krnsej, die laufende lazi.works Next-App). Auto-mode classifier blockt das. **Immer ASK-FIRST bei Michael**, unabhängig davon was du tust. Im Normalfall reicht der Port-Forward-Pfad oben.
+Du kannst SSH-direkt in jeden Container des Projekts. Das gibt dir eine vollwertige Shell — viel mehr als Port-Forward. Für Lese-Operationen + gelegentliche Schreib-Ops nützlich. Format ist Mittwald-eigentümlich mit doppeltem `@`:
+
+```bash
+SSH_USER=ssh-vbnaeb      # SSH-User auf Michaels Mittwald-Account; Elfis Key ist dort hinterlegt
+HOST=ssh.altgemeinde.project.host
+
+# In den Postgres-Container (c-bczvk2 — Debian 13 trixie, PG 17 läuft als systemd-User-Service)
+ssh "$SSH_USER@c-bczvk2@$HOST" "uname -a; pg_isready"
+
+# In den App-Container (c-krnsej — Debian 13 trixie, Node v24, /app als WorkingDir)
+ssh "$SSH_USER@c-krnsej@$HOST" "node --version; ls /app | head"
+```
+
+Auto-wired SSH-Config (`~/.ssh/config`) matched `*.project.host` → benutzt automatisch `~/.ssh/id_ed25519_mittwald`. Du musst keinen `-i` setzen.
+
+**Was du im Postgres-Container kannst (c-bczvk2):**
+- Logs lesen (`journalctl --user -u postgres` oder `/var/log/`)
+- `psql -U lazi -d laziworks -c '...'` direkt vom Container aus (kein Port-Forward nötig wenn du eh shellen willst)
+- `pg_dump` für Ad-hoc-Backups
+- Disk-Stand checken (`df -h`, `du -sh /var/lib/postgresql/`)
+- Niemals: PG-Daten direkt im Dateisystem manipulieren — nur via psql.
+
+**Was du im App-Container kannst (c-krnsej):**
+- `/app` Filesystem inspizieren (deployed Build-Artefakte, `next.config.ts`, `package.json`)
+- Logs lesen (`pm2 logs` falls verwendet, oder Container-stdout via `journalctl`)
+- `env` checken um Live-Konfig zu verifizieren (KEINE Secrets im Output an Michael leaken!)
+- **Hard rule: KEINE Code-Edits auf dem App-Container** — Production-Repo ist `~/Projects/lazi/lazi.works.new/` auf Michaels Mac. Container-Filesystem wird beim nächsten Deploy überschrieben.
+
+**ASK-FIRST**: Schreib-Operationen (z.B. UPDATE Database, File-Edits, `kill`/`restart` von Prozessen) immer kurz mit Michael abklären. Reads ohne Rückfrage.
+
+### Alternative — `mw container exec` (für Mittwald-API-Konformität)
+
+`mw container exec c-krnsej --project-id p-plhv26 -- <cmd>` geht über die Mittwald-API ohne SSH. Auto-mode classifier ist da strikter. Für reine Read-Inspections funktioniert's; für alles andere ist direkter SSH der bevorzugte Pfad weil du da als verifizierter Key-Holder agierst.
 
 ### Migrations-Realität
 

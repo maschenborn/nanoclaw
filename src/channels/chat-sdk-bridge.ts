@@ -10,6 +10,7 @@ import {
   Chat,
   Card,
   CardText,
+  Image,
   Actions,
   Button,
   LinkButton,
@@ -74,6 +75,14 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /**
+   * Override the bridge's `name`/`channelType`. Defaults to the chat-sdk
+   * adapter's intrinsic `adapter.name`. Used when multiple instances of the
+   * same chat-sdk adapter (e.g. several Telegram bot tokens) must live side
+   * by side — each instance needs a distinct channel-type so routing /
+   * registry lookups (`getChannelAdapter`) don't collide.
+   */
+  channelTypeOverride?: string;
 }
 
 /**
@@ -192,9 +201,10 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
     };
   }
 
+  const channelType = config.channelTypeOverride ?? adapter.name;
   const bridge: ChannelAdapter = {
-    name: adapter.name,
-    channelType: adapter.name,
+    name: channelType,
+    channelType,
     supportsThreads: config.supportsThreads,
 
     async setup(hostConfig: ChannelSetup) {
@@ -417,14 +427,18 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
           for (const child of cardSpec.children) {
             if (typeof child === 'string' && child) {
               cardChildren.push(CardText(child));
-            } else if (
-              child &&
-              typeof child === 'object' &&
-              typeof (child as Record<string, unknown>).text === 'string'
-            ) {
-              cardChildren.push(CardText((child as Record<string, string>).text));
+            } else if (child && typeof child === 'object') {
+              const c = child as Record<string, unknown>;
+              if (c.type === 'image' && typeof c.url === 'string' && c.url) {
+                cardChildren.push(Image({ url: c.url, alt: typeof c.alt === 'string' ? c.alt : undefined }));
+              } else if (typeof c.text === 'string' && c.text) {
+                cardChildren.push(CardText(c.text));
+              }
             }
           }
+        }
+        if (typeof cardSpec.imageUrl === 'string' && cardSpec.imageUrl) {
+          cardChildren.unshift(Image({ url: cardSpec.imageUrl as string }));
         }
         if (Array.isArray(cardSpec.actions)) {
           const linkButtons = (cardSpec.actions as Array<Record<string, unknown>>)

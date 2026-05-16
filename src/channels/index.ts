@@ -10,3 +10,5 @@ import './cli.js';
 import './whatsapp.js';
 import './resend.js';
 import './gchat.js';
+import './telegram.js';
+import './teams.js';

@@ -32,17 +32,18 @@ Das **DOK-Sheet** ist die Source of Truth für Anwesenheit, LOG und Noten. Per S
 
 Tabs heißen `DIME | 444`, `DIME | 555` (gid `244262870`), `DIME | 666`.
 
-### Layout (SS 2026)
+### Layout (SS 2026) — verifiziert aus CSV-Export 2026-05-11
 
 ```
 Row 1 :  Bereichsüberschriften — LOG ab Spalte AP, NOTEN ab Spalte AU
-Row 3 :  Header Anwesenheit
-         A=Vorname, B=Nachname, C=Gruppe, J="Einheit ="
-         K..AC = UE 1 .. UE 30  (15 reichen oft)
-Row 4 :  Header LOG
-         AP=UE-Nr, AQ=Datum, AR=Beschreibung, AS=Anmerkung, AT=Gewichtung
+Row 2 :  Unterüberschriften / Notizen
+Row 3 :  UE-Nummern (1–30)
+Row 4 :  Header-Zeile — Vorname, Nachname, Gruppe, Sem, e-Mail, B, M, F, %
+         + Datum-Header für jede UE
+         + LOG: AP=UE-Nr, AQ=Datum, AR=Beschreibung, AS=Anmerkung, AT=Gewichtung
+         + NOTEN-Header
 Row 5+:  Studierende (Anwesenheit) UND parallel LOG-Einträge
-         (UE-Nr + Datum vorausgefüllt)
+         (UE-Nr + Datum vorausgefüllt in AP/AQ)
 
 Anwesenheits-Werte:  A = anwesend
                      F = Fehlt unentschuldigt
@@ -52,39 +53,100 @@ NOTEN-Spalten:  AU = "Praktische Klausur" (erste Note)
                 AV..BB = "Beschreibung der Note" (weitere Klausur-Slots)
 ```
 
+### API-Zugriff
+
+Seit OneCLI Multi-Account-Apps eingerichtet ist, läuft Auth transparent über den Gateway — Elfis OneCLI-Identität bekommt automatisch den LAZI-Bearer-Token injiziert. Kein `--noproxy`, kein Token-Holen mehr im Skill.
+
+**Lesen (CSV-Export, schnellster Pfad):**
+```bash
+curl -s "https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
+```
+DIME 555: `gid=244262870`
+
+**Lesen via Sheets-API (strukturiert, mit Formeln/Formatierung):**
+```bash
+curl -s "https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/'DIME%20%7C%20555'!A1:Z100"
+```
+
+**Schreiben:**
+```bash
+curl -s -X PUT "https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/'DIME%20%7C%20555'!AR10?valueInputOption=USER_ENTERED" \
+  -H "Content-Type: application/json" \
+  -d '{"values":[["Beschreibung hier"]]}'
+```
+
+Siehe `google-lazi`-Skill für die Auth-Architektur insgesamt.
+
 ### UE → Row-Mapping (LOG-Einträge)
 
 ```
-UE1 = Row 5
-UE2 = Row 6
-...
-UE7 = Row 11
+UE1  = Row 5
+UE2  = Row 6
+UE3  = Row 7
+UE4  = Row 8
+UE5  = Row 9
+UE6  = Row 10
+UE7  = Row 11
+UE8  = Row 12
+UE9  = Row 13
+UE10 = Row 14
 UE15 = Row 19
 ```
 
-Anwesenheits-Spalten:
+Anwesenheits-Spalten (Index 0-basiert in CSV = Index 10 = Spalte K für UE1):
 ```
-UE1 = K (Index 10)
-UE2 = L (11)
+UE1  = K (Index 10)
+UE2  = L (11)
+UE3  = M (12)
+UE4  = N (13)
+UE5  = O (14)
+UE6  = P (15)
+UE7  = Q (16)
+UE8  = R (17)
+UE9  = S (18)
 ...
-UE7 = Q
+UE15 = Y (24)
 ```
 
 ### Wichtig — niemals Zukunft überschreiben
 
 Termine sind **vorausgefüllt** über das ganze Semester. Beim Schreiben **immer nach Datum ≤ heute filtern**, sonst zerstörst du Zukunfts-Slots, die noch befüllt werden müssen.
 
-### Bereits eingetragene LOGs (SS 2026, Stand 2026-05-04)
+### LOG-Status DOK-Sheet (Stand 2026-05-11)
 
-- `DIME | 555` AR9 (UE5 13.04.) — Praktischer Test HTML/CSS
-- `DIME | 555` AR11 (UE7 27.04.) — Praktische Klausur HTML/CSS
-- `DIME | 666` AR11 (UE7 27.04.) — Single-Purpose-Apps Präsentationen + kite.video
+**DIME 555** (gid=244262870) — eingetragen:
+- AR5 (UE1), AR6 (UE2), AR7 (UE3) — von Beginn an
+- AR8 (UE4) — DIV, IP-Adressen & Box-Modell ✅ 2026-05-11
+- AR9 (UE5) — Praktischer Test HTML/CSS
+- AR10 (UE6) — Übungsaufgabe HTML/CSS-Nachbau ✅ 2026-05-11
+- AR11 (UE7) — Praktische Klausur HTML/CSS
+- AR12 (UE8) — Bootstrap — Einstieg & Stylepark-Nachbau ✅ 2026-05-11
+- AR13 (UE9) — Bootstrap — Breakpoints & Grid ✅ 2026-05-11
+
+**DIME 666** — eingetragen:
+- AR11 (UE7) — Single-Purpose-Apps Präsentationen + kite.video
+- AR13 (UE9) — Mockups + lazi.works-Referenzseite ✅ 2026-05-11
+
+**Noch fehlende DOK-Sheet-LOGs:**
+
+| Kurs | UE | Datum | Thema |
+|---|---|---|---|
+| DIME 444 | UE 6+8 | 13.05. | Nachholtermin (entfallen 14.04. + 28.04.) Doppeleinheit |
+| DIME 444 | UE 9 | 05.05. | Designstile (Skeuomorphismus, Flat Design, Material Design, Neumorphismus, Glassmorphismus, Expressive Material) |
+| DIME 666 | UE 6 | 20.04. | Single-Purpose-App — Fertigstellung |
+| DIME 666 | UE 8 | 04.05. | Landingpage zur App — KI-Tools; technische Schwierigkeiten, nicht abgeschlossen |
+
+**DIME 666 UE9 (AR13):** "Single-Purpose-App: Mockups finalisiert & auf lazi.works veröffentlicht — Projekt abgeschlossen" ✅ 2026-05-12
+
+**Obsidian-Vault-Tagebücher** sind vollständig eingepflegt (Stand 2026-05-11, DIME 555 + DIME 666 bis UE9).
 
 ## Google Classroom API
 
-**Auth-Flow**: OAuth Desktop-App, Refresh-Token. Bundle bereits über `google-lazi`-Skill — siehe dort für Token-Exchange. Identität: `michael.aschenborn@lazi-akademie.de` (Lehrkraft-Account in LAZI Workspace).
+**Auth-Flow**: OneCLI-Gateway injiziert Elfis LAZI-Bearer (Account `michael.aschenborn@lazi-akademie.de`, Workspace `lazi-akademie.de`) auf jeden Call an `*.googleapis.com`. Skill-Code ruft die Endpoints ohne eigene Token-Logik. Siehe `google-lazi` für die Architektur-Details.
 
-**GCP-Projekt**: `dime-474307`. Aktive APIs: Classroom, Sheets, Docs, Slides, Forms, Drive.
+**GCP-Projekt** (für Reference): `dime-474307`. Aktive APIs: Classroom, Sheets, Docs, Slides, Forms, Drive.
+
+**Scopes**: Werden bei der OneCLI-OAuth-Verbindung in der Web-UI gesetzt; aktuell konfigurierte Scope-Liste siehe https://onecli.aschenborn.dev → Apps → Google Classroom → Details. Falls `classroom.coursework.students` (Lehrer-Coursework-Schreibrecht) fehlen sollte und CourseWork-Create 403 PERMISSION_DENIED gibt: in der OneCLI-UI für Google Classroom auf "Reconnect" und beim Consent-Screen den fehlenden Scope mit anhaken.
 
 ### Helper-Patterns aus dem `classroom-api/`-Repo
 
@@ -225,18 +287,20 @@ DOK `DIME | 555` Spalte AU bereits gesetzt. Plagiats-Cluster sind erkannt und do
 
 ## LDAP-UIDs der Luna-Studierenden (für NAS-Deploys)
 
-```
-cora.gressinger        228642813
-maart.luehrs           1708436834
-bruce.khieosavath      1986693865
-emanuel.knezevic       1358388061
-marlene.strobel         481794074
-elia.kissling           838997708
-lana.schuetz           1022641487
-nathalie.stempniewicz   223694182
-selina.neufeld          241381198
-christopher.scherer    (kein Home, Stand 2026-05-04 — neu prüfen)
-```
+Verifizierter Roster aus DOK-Sheet CSV (Stand 2026-05-11):
+
+| Name | UID | Gruppe | Anwesenheit |
+|---|---|---|---|
+| Cora Gressinger | 228642813 | — | regelmäßig |
+| Maart Lührs | 1708436834 | — | unregelmäßig |
+| Bruce Khieosavath | 1986693865 | — | regelmäßig |
+| Emanuel Knezevic | 1358388061 | — | regelmäßig |
+| Marlene Strobel | 481794074 | — | regelmäßig |
+| Elia Kissling | 838997708 | — | unregelmäßig |
+| Lana Schütz | 1022641487 | — | regelmäßig |
+| Nathalie Stempniewicz | 223694182 | — | regelmäßig |
+| Selina Neufeld | 241381198 | — | regelmäßig |
+| Christopher Scherer | (kein Home) | — | **war bisher die gesamte Semester (UE1–UE9) nie anwesend** |
 
 UIDs für `lazistation`-Skill bei Deploys auf `/volume1/homes/@LH-LAZI-AKADEMIE.DE/<numericID>/...`.
 

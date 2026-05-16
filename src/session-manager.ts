@@ -163,7 +163,19 @@ export function writeSessionRouting(agentGroupId: string, sessionId: string): vo
 
   let channelType: string | null = null;
   let platformId: string | null = null;
-  if (session.messaging_group_id) {
+  let threadId: string | null = session.thread_id;
+
+  // outbound_mode='none' must close BOTH outbound paths:
+  // (1) destinations (cleared by writeDestinations), and
+  // (2) default session routing (cleared here). Otherwise send_message
+  // without an explicit `to` falls through to a session-bound reply on the
+  // originating channel — exactly what an autonomous task session must NOT
+  // do. (Caught 2026-05-12: dream session sent at 03:05 via this path.)
+  if (session.outbound_mode === 'none') {
+    channelType = null;
+    platformId = null;
+    threadId = null;
+  } else if (session.messaging_group_id) {
     const mg = getMessagingGroup(session.messaging_group_id);
     if (mg) {
       channelType = mg.channel_type;
@@ -176,12 +188,12 @@ export function writeSessionRouting(agentGroupId: string, sessionId: string): vo
     upsertSessionRouting(db, {
       channel_type: channelType,
       platform_id: platformId,
-      thread_id: session.thread_id,
+      thread_id: threadId,
     });
   } finally {
     db.close();
   }
-  log.debug('Session routing written', { sessionId, channelType, platformId, threadId: session.thread_id });
+  log.debug('Session routing written', { sessionId, channelType, platformId, threadId });
 }
 
 /**

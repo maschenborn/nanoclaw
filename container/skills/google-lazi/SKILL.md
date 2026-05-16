@@ -1,54 +1,57 @@
 ---
 name: google-lazi
-description: Read and write to Michael's LAZI Google Workspace (`michael.aschenborn@lazi-akademie.de`) — Gmail, Calendar, Drive, Docs, Sheets, Forms, Classroom. Use whenever the user (Michael, addressing Elfi) asks about LAZI Mails / Termine / Klassen / Materialien — e.g. "was ist heute LAZI-mäßig in meinem Kalender?", "letzte Mail vom Schulleiter?", "leg eine neue Aufgabe in DiMe-Classroom an", "schick eine Nachricht an die Klasse". Auth flow handled inside this skill (OAuth refresh-token from `.env` → access-token → API call).
+description: Read and write to Michael's LAZI Google Workspace (`michael.aschenborn@lazi-akademie.de`) — Gmail, Calendar, Drive, Docs, Sheets, Forms, Classroom. Use whenever the user (Michael, addressing Elfi) asks about LAZI Mails / Termine / Klassen / Materialien — e.g. "was ist heute LAZI-mäßig in meinem Kalender?", "letzte Mail vom Schulleiter?", "leg eine neue Aufgabe in DiMe-Classroom an", "schick eine Nachricht an die Klasse". OAuth handled transparently by the OneCLI gateway — no token logic in the skill.
 ---
 
 # Google LAZI Skill
 
-Elfi authenticates as **`michael.aschenborn@lazi-akademie.de`** (a Workspace user in the `lazi-akademie.de` domain) using a long-lived OAuth refresh-token from a Cloud project owned by Michael (`dime-474307`). The token bundle is base64-encoded in env var `ELFI_GOOGLE_BUNDLE_B64` and contains:
+Elfi handelt als **`michael.aschenborn@lazi-akademie.de`** im `lazi-akademie.de`-Workspace. Die Auth läuft komplett über den **OneCLI-Gateway**: OneCLI hält die OAuth-Refresh-Tokens für diesen Account, ist Elfis OneCLI-Agent-Identität exklusiv zugeordnet (nicht m.aschenborn@gmail.com — das ist Alfreds Account), und injiziert frische Access-Tokens in jeden Request an `*.googleapis.com` im Hintergrund.
 
-```
-{
-  "client_id":     "545191364579-...apps.googleusercontent.com",
-  "client_secret": "GOCSPX-...",
-  "refresh_token": "1//03-...",
-  "token_uri":     "https://oauth2.googleapis.com/token",
-  "project_id":    "dime-474307",
-  "scopes":        [ "...gmail.modify", "...gmail.send", "...calendar", "...drive", ... ],
-  "identity":      "michael.aschenborn@lazi-akademie.de"
-}
-```
-
-The bundle is also mirrored into OneCLI vault as `Elfi LAZI Google` (id `91b1e11e-f2c8-42eb-8dfd-606c0f782e62`) for audit-trail purposes — but **at runtime the env var is the source**, since OneCLI vault is write-only.
+Konsequenz für die Skill-Code-Seite: **du sendest die HTTPS-Calls einfach so**. Keine Token-Holung, keine Refresh-Logik, kein `--noproxy`. Der Gateway-Proxy (HTTPS_PROXY env im Container) intercepted die Calls, ersetzt das fehlende `Authorization`-Header durch den passenden LAZI-Bearer, und routet weiter.
 
 ## Auth flow — every API call
 
-You exchange the **long-lived refresh-token** for a **short-lived (60-min) access-token** at the token endpoint, then use the access-token as Bearer for the actual API call:
+Plain curl, kein Auth-Header nötig, OneCLI ergänzt ihn:
 
 ```bash
-# 1. Decode bundle, extract fields
-BUNDLE=$(echo "$ELFI_GOOGLE_BUNDLE_B64" | base64 -d)
-CLIENT_ID=$(echo "$BUNDLE" | jq -r .client_id)
-CLIENT_SECRET=$(echo "$BUNDLE" | jq -r .client_secret)
-REFRESH_TOKEN=$(echo "$BUNDLE" | jq -r .refresh_token)
-TOKEN_URI=$(echo "$BUNDLE" | jq -r .token_uri)
-
-# 2. Exchange refresh -> access (cache for ~3500s, refresh before expiry)
-ACCESS_TOKEN=$(curl -s -X POST "$TOKEN_URI" \
-  -d "grant_type=refresh_token" \
-  -d "refresh_token=$REFRESH_TOKEN" \
-  -d "client_id=$CLIENT_ID" \
-  -d "client_secret=$CLIENT_SECRET" \
-  | jq -r .access_token)
-
-# 3. Use as Bearer for any Google API
-curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
-  "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+curl -s "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+# → { "emailAddress": "michael.aschenborn@lazi-akademie.de", ... }
 ```
 
-**Cache the access-token** within a single session if you're going to make multiple calls — recompute only when expired (>50min old) or when an API call returns 401. Don't refresh on every single call (that hammers the token endpoint).
+Falls du explizit einen Bearer setzt (z.B. weil eine Library standardmäßig leeren Header sendet), reicht ein Placeholder — OneCLI ersetzt ihn:
 
-A cached access-token can live in a temp file in `/tmp/` (in-memory tmpfs in containers), e.g. `/tmp/elfi-access-token` with the expiry timestamp.
+```bash
+curl -s -H "Authorization: Bearer onecli-managed" \
+  "https://drive.googleapis.com/drive/v3/files?pageSize=10"
+```
+
+### Was passierte vorher (Hintergrund, NICHT mehr nötig)
+
+Bis 2026-05-16 lag das LAZI-OAuth-Bundle als read-only Mount im Container und das Skill machte den refresh→access-Tausch selbst, mit `--noproxy googleapis.com` damit der Gateway nicht interferiert. Seit OneCLI Multi-Account-Apps konfiguriert ist und der LAZI-Account Elfis OneCLI-Identität (`ag-1778163532245-qw4nmf`) exklusiv zugewiesen ist, übernimmt der Gateway das. Der Mount `/workspace/extra/lazi-google/google-bundle.json` existiert weiter als Notfall-Fallback (falls OneCLI mal ausfällt) — Code dafür im Git-History unter dieser Skill.
+
+## Identity check — wer bin ich gerade
+
+Sanity-Check ob OneCLI Elfis LAZI-Account injiziert (nicht Alfreds m.aschenborn). **Wichtig: NICHT `/oauth2/v2/userinfo` benutzen** — diese Endpoint ist in OneCLIs Apps-Registry nicht als Provider gemapped und liefert daher `access_restricted` auch wenn die Identität korrekt da ist. Das hat NICHTS mit verlorenem Zugriff zu tun. Nutze stattdessen Gmail-Profile als Identitäts-Quelle:
+
+```bash
+curl -s "https://gmail.googleapis.com/gmail/v1/users/me/profile" | jq -r .emailAddress
+# Sollte: "michael.aschenborn@lazi-akademie.de"
+# Bei "m.aschenborn@gmail.com" → falsche Identität, OneCLI-Assignment in der UI prüfen
+```
+
+## Troubleshooting: `SERVICE_DISABLED` mit GCP-Projekt 311791545398
+
+Wenn ein Google-API-Call mit Status 403 und Message wie *"<Service> API has not been used in project 311791545398 before or it is disabled"* zurückkommt — das ist KEIN Projekt-Routing-Fehler, sondern ein einmaliges Setup:
+
+- Projekt `311791545398` = `gen-lang-client-0132377876` = das **GCP-Projekt des OneCLI-OAuth-Clients** (BYOC-Web-Client `311791545398-dbnbie7h…`).
+- Google quotaed API-Calls gegen das OAuth-Client-Projekt (Quota-Bind via `X-Goog-User-Project`), nicht gegen das Daten-Projekt `dime-474307`.
+- Lösung: **Michael muss die fehlende API in jenem Projekt aktivieren** — einmalig im Cloud Console:
+  ```
+  https://console.cloud.google.com/apis/library/<API>.googleapis.com?project=gen-lang-client-0132377876
+  ```
+  (`<API>` = `sheets`, `classroom`, `docs`, `forms`, `drive`, `tasks`, `slides`, etc.)
+
+Nicht selbst versuchen das zu umgehen mit `--noproxy googleapis.com` und Bundle-Read — das fällt zwar auf den alten Fallback-Pfad zurück (siehe "Was passierte vorher"), aber damit sieht keiner mehr den OneCLI-Account-Bind und Multi-Account-Isolation ist hin. Statt dessen: kurz Michael pingen ("Bitte API X in Projekt 311791545398 aktivieren") und auf seine Bestätigung warten.
 
 ## Scope distinction
 

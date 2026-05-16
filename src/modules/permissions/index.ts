@@ -90,11 +90,19 @@ function extractAndUpsertUser(event: InboundEvent): string | null {
   const rawHandle = senderIdField ?? senderField ?? authorUserId;
   if (!rawHandle) return null;
 
-  const userId = rawHandle.includes(':') ? rawHandle : `${event.channelType}:${rawHandle}`;
+  // Canonicalise the platform "kind" by stripping any sub-instance suffix
+  // (`telegram-elfi` → `telegram`). Multiple adapters of the same platform
+  // (e.g. several Telegram bot tokens, or whatsapp + whatsapp-cloud) all
+  // see the same physical user — using the suffixed channel-type as the
+  // user-id prefix would fragment one user's identity per bot and break
+  // global role lookups (owner/admin). Channel-type stays specific for
+  // messaging-group routing; identity uses the platform family.
+  const kind = event.channelType.split('-')[0];
+  const userId = rawHandle.includes(':') ? rawHandle : `${kind}:${rawHandle}`;
   if (!getUser(userId)) {
     upsertUser({
       id: userId,
-      kind: event.channelType,
+      kind,
       display_name: senderName ?? null,
       created_at: new Date().toISOString(),
     });

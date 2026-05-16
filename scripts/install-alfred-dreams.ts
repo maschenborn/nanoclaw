@@ -95,20 +95,18 @@ function main(): void {
     });
     console.log(`OK:inserted id=${TASK_ID} recurrence='${RECURRENCE}' session=${session.id}`);
 
-    // Seed michael-dm destination so Alfred can call send_message at end of
-    // night. Per-thread sessions don't auto-inherit destinations from the
-    // main session — copy/insert idempotently.
-    const destExists = inboxDb
+    // Intentionally do NOT seed `michael-dm` in this session. The dream task
+    // must not send WhatsApp messages at 3 AM — without a destination wired,
+    // any send_message call fails with "No destinations configured", which is
+    // the structural guard. The morning-task (separate main-session task at
+    // 06:00) reads /workspace/agent/dream-report-latest.md and delivers the
+    // summary.
+    const stale = inboxDb
       .prepare("SELECT 1 FROM destinations WHERE name = 'michael-dm'")
       .get();
-    if (!destExists) {
-      inboxDb
-        .prepare(
-          `INSERT INTO destinations (name, display_name, type, channel_type, platform_id, agent_group_id)
-           VALUES ('michael-dm', 'Michael DM', 'channel', 'whatsapp', '491633456809@s.whatsapp.net', NULL)`,
-        )
-        .run();
-      console.log('OK:seeded destination michael-dm');
+    if (stale) {
+      inboxDb.prepare("DELETE FROM destinations WHERE name = 'michael-dm'").run();
+      console.log('OK:removed stale michael-dm destination from dream session');
     }
   } finally {
     inboxDb.close();

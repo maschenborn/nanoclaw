@@ -162,14 +162,6 @@ def run_container(runtime: str, image: str, payload: dict,
                 cmd += ["--mount", f"type=bind,source={host},target={container},readonly"]
             else:
                 cmd += ["-v", f"{host}:{container}"]
-    # Forward per-run vars from the caller's environment (e.g. PAPERCLIP_RUN_ID,
-    # PAPERCLIP_AGENT_ID, PAPERCLIP_WAKE_COMMENT_ID) — set by the openclaw
-    # gateway when dispatching a Paperclip wake. The actual API token is NOT
-    # included; it lives in OneCLI and is injected by the proxy on outbound
-    # requests to paperclip.aschenborn.net.
-    for k, v in os.environ.items():
-        if k.startswith("PAPERCLIP_") and k != "PAPERCLIP_API_KEY":
-            cmd += ["-e", f"{k}={v}"]
     cmd.append(image)
     dbg(f"cmd: {' '.join(cmd)}")
 
